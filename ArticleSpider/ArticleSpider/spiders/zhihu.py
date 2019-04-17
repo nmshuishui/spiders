@@ -28,7 +28,6 @@ class ZhihuSpider(scrapy.Spider):
 
         browser.get('https://www.zhihu.com')
 
-        is_login = True
         try:
             browser.find_element_by_class_name('PushNotifications-icon')
             is_login = True
@@ -79,26 +78,37 @@ class ZhihuSpider(scrapy.Spider):
                 z = zheye()
 
                 chinese_pos = []
-                relative_positions = z.Recognize('chineseImg.jpg')
-                if len(relative_positions) == 2:
-                    if relative_positions[0][1] > relative_positions[1][1]:
-                        chinese_pos.append([relative_positions[1][1], relative_positions[1][0]])
-                        chinese_pos.append([relative_positions[0][1], relative_positions[0][0]])
-                    else:
-                        chinese_pos.append([relative_positions[0][1], relative_positions[0][0]])
-                        chinese_pos.append([relative_positions[1][1], relative_positions[1][0]])
+                try:
+                    relative_positions = z.Recognize('chineseImg.jpg')
+                    if len(relative_positions) == 2:
+                        if relative_positions[0][1] > relative_positions[1][1]:
+                            chinese_pos.append([relative_positions[1][1], relative_positions[1][0]])
+                            chinese_pos.append([relative_positions[0][1], relative_positions[0][0]])
+                        else:
+                            chinese_pos.append([relative_positions[0][1], relative_positions[0][0]])
+                            chinese_pos.append([relative_positions[1][1], relative_positions[1][0]])
 
-                    # 浏览器和显示器一定要设置显示为100%：控制面板\外观和个性化\显示，否则获取的坐标位置不正确
-                    from mouse import move,click
-                    first_x = img_x + chinese_pos[0][0] / 2
-                    first_y = img_y + chinese_pos[0][1] / 2 + toolbar_position
-                    move(first_x,first_y)
-                    click()
-                    second_x = img_x + chinese_pos[1][0] / 2
-                    second_y = img_y + chinese_pos[1][1] / 2 + toolbar_position
-                    move(second_x, second_y)
-                    click()
-                    browser.find_element_by_css_selector('.Button.SignFlow-submitButton').click()
+                        # 浏览器和显示器一定要设置显示为100%：控制面板\外观和个性化\显示，否则获取的坐标位置不正确
+                        from mouse import move,click
+                        first_x = img_x + chinese_pos[0][0] / 2
+                        first_y = img_y + chinese_pos[0][1] / 2 + toolbar_position
+                        move(first_x,first_y)
+                        click()
+                        second_x = img_x + chinese_pos[1][0] / 2
+                        second_y = img_y + chinese_pos[1][1] / 2 + toolbar_position
+                        move(second_x, second_y)
+                        click()
+                        browser.find_element_by_css_selector('.Button.SignFlow-submitButton').click()
+                        # sleep一下，要不登录成功后，还没来的急跳转就获取不到登录成功的元素
+                        sleep(3)
+                        try:
+                            browser.find_element_by_class_name('PushNotifications-icon')
+                            is_login = True
+                        except:
+                            is_login = False
+                except OSError as e:
+                    # 捕获生成的验证码图片打不开 和 1个倒立文字的情况
+                    print(e)
 
 
     def parse(self, response):
