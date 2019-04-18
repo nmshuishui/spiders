@@ -64,3 +64,29 @@ class JobboleItem(scrapy.Item):
     )
     front_image_path = scrapy.Field()
     url_object_id = scrapy.Field()
+
+
+class ZhihuQuestionItem(scrapy.Item):
+    zhihu_id = scrapy.Field()
+    topics = scrapy.Field()
+    url = scrapy.Field()
+    title = scrapy.Field()
+    content = scrapy.Field()
+    answer_num = scrapy.Field()
+    comments_num = scrapy.Field()
+    watch_user_num = scrapy.Field()
+    click_num = scrapy.Field()
+    crawl_time = scrapy.Field()
+
+
+class ZhihuAnswerItem(scrapy.Item):
+    zhihu_id = scrapy.Field()
+    url = scrapy.Field()
+    question_id = scrapy.Field()
+    author_id = scrapy.Field()
+    content = scrapy.Field()
+    voteup_num = scrapy.Field()
+    comment_num = scrapy.Field()
+    created_time = scrapy.Field()
+    updated_time = scrapy.Field()
+    crawl_time = scrapy.Field()

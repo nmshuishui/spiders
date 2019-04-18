@@ -4,6 +4,15 @@ import scrapy
 from selenium import webdriver
 from time import sleep
 import base64
+try:
+    import urlparse as parse
+except:
+    from urllib import parse
+import re
+import json
+import datetime
+from scrapy.loader import ItemLoader
+from ArticleSpider.items import ZhihuAnswerItem,ZhihuQuestionItem
 
 
 class ZhihuSpider(scrapy.Spider):
@@ -39,7 +48,7 @@ class ZhihuSpider(scrapy.Spider):
             cookie_dict = {}
             for cookie in cookies:
                 cookie_dict[cookie['name']] = cookie['value']
-            browser.close()
+            # browser.close()
 
             return [scrapy.Request(url=self.start_urls[0], dont_filter=True, cookies=cookie_dict)]
 
@@ -104,6 +113,7 @@ class ZhihuSpider(scrapy.Spider):
                         try:
                             browser.find_element_by_class_name('PushNotifications-icon')
                             is_login = True
+                            return [scrapy.Request(url=self.start_urls[0], dont_filter=True)]
                         except:
                             is_login = False
                 except OSError as e:
@@ -112,4 +122,55 @@ class ZhihuSpider(scrapy.Spider):
 
 
     def parse(self, response):
+        all_urls = response.css('.ContentItem-title div a::attr(href)').extract()
+        for url in all_urls:
+            url = re.match('(.*/question/(\d+/)).*',parse.urljoin(response.url,url)).group(1)
+            yield scrapy.Request(url=url, callback=self.parseQuestion)
+
+
+    def parseQuestion(self, response):
+        question_id = re.match('(.*/question/(\d+)).*',response.url).group(2)
+        answers_api = "https://www.zhihu.com/api/v4/questions/{0}/answers?include=data%5B%2A%5D.is_normal%2Cadmin_closed_comment%2Creward_info%2Cis_collapsed%2Cannotation_action%2Cannotation_detail%2Ccollapse_reason%2Cis_sticky%2Ccollapsed_by%2Csuggest_edit%2Ccomment_count%2Ccan_comment%2Ccontent%2Ceditable_content%2Cvoteup_count%2Creshipment_settings%2Ccomment_permission%2Ccreated_time%2Cupdated_time%2Creview_info%2Crelevant_info%2Cquestion%2Cexcerpt%2Crelationship.is_authorized%2Cis_author%2Cvoting%2Cis_thanked%2Cis_nothelp%2Cis_labeled%2Cis_recognized%2Cpaid_info%3Bdata%5B%2A%5D.mark_infos%5B%2A%5D.url%3Bdata%5B%2A%5D.author.follower_count%2Cbadge%5B%2A%5D.topics&limit={1}&offset={2}&platform=desktop&sort_by=default".format(question_id,5,0)
+
+        question_item = ItemLoader(item=ZhihuQuestionItem(), response=response)
+
+        question_item.add_value('zhihu_id', question_id)
+        question_item.add_css('topics', '.QuestionHeader-topics .Popover div::text')
+        question_item.add_value('url', response.url)
+        question_item.add_css('title', '.QuestionHeader-topics .QuestionHeader-title::text')
+        question_item.add_css('content', '.QuestionAnswer-content')
+        question_item.add_xpath('answer_num','//*[@id="root"]/div/main/div/div[2]/div[1]/div/div[1]/a/text()')
+        question_item.add_css('watch_user_num', '.QuestionFollowStatus-counts button .NumberBoard-itemValue')
+        question_item.add_css('view_num', '.QuestionFollowStatus-counts div .NumberBoard-itemValue')
+
+        question_item = ItemLoader.load_item()
+
+        yield scrapy.Request(url=answers_api, callback=self.parseAnswer)
+        yield question_item
+        pass
+
+
+    def parseAnswer(self, reponse):
+        answers = json.loads(reponse.text)
+        next_url = answers['paging']['next']
+        is_end = answers['paging']['is_end']
+
+        for answer in answers['data']:
+            answer_item = ZhihuAnswerItem()
+            answer_item['zhihu_id'] = answer['id']
+            answer_item['url'] = answer['url']
+            answer_item['question_id'] = answer['question']['id']
+            answer_item['author_id'] = answer['author']['id']
+            answer_item['content'] = answer['content']
+            answer_item['voteup_num'] = answer['voteup_count']
+            answer_item['comment_num'] = answer['comment_count']
+            answer_item['created_time'] = answer['created_time']
+            answer_item['updated_time'] = answer['updated_time']
+            answer_item['crawl_time'] = datetime.datetime.now()
+
+            yield answer_item
+
+        if not is_end:
+            yield scrapy.Request(next_url, callback=self.parseAnswer)
+
         pass
