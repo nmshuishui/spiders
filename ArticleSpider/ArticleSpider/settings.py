@@ -71,11 +71,12 @@ DOWNLOADER_MIDDLEWARES = {
 # Configure item pipelines
 # See https://doc.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-   'ArticleSpider.pipelines.ArticlespiderPipeline': 300,
-   'ArticleSpider.pipelines.MysqlPipeline': 10,
-   'ArticleSpider.pipelines.JsonPipeline': 20,
-   'scrapy.pipelines.images.ImagesPipeline': 30,
-   'ArticleSpider.pipelines.ArticleImagePipeline': 3,
+   # 'ArticleSpider.pipelines.ArticlespiderPipeline': 300,
+   # 'ArticleSpider.pipelines.MysqlPipeline': 10,
+   # 'ArticleSpider.pipelines.JsonPipeline': 20,
+   # 'scrapy.pipelines.images.ImagesPipeline': 30,
+   # 'ArticleSpider.pipelines.ArticleImagePipeline': 3,
+   'ArticleSpider.pipelines.MysqlTwistedPipline': 1,
 }
 
 IMAGES_URLS_FIELD = "front_image_url"  #front_image_url是在items.py中配置的网络爬取得图片地址
@@ -102,3 +103,12 @@ IMAGES_STORE = os.path.join(project_dir, 'images')
 #HTTPCACHE_DIR = 'httpcache'
 #HTTPCACHE_IGNORE_HTTP_CODES = []
 #HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
+
+
+MYSQL_HOST = '127.0.0.1'
+MYSQL_DBNAME = 'scrapyspider'
+MYSQL_USER = 'root'
+MYSQL_PASSWORD = 'root'
+
+SQL_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+SQL_DATE_FORMAT = "%Y-%m-%d"

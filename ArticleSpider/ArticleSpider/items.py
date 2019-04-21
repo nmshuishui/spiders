@@ -10,6 +10,8 @@ from scrapy.loader.processors import MapCompose,TakeFirst
 from scrapy.loader import ItemLoader
 import datetime
 import re
+from ArticleSpider.settings import SQL_DATETIME_FORMAT, SQL_DATE_FORMAT
+from ArticleSpider.utils.common import extract_num
 
 
 class ArticlespiderItem(scrapy.Item):
@@ -73,10 +75,39 @@ class ZhihuQuestionItem(scrapy.Item):
     title = scrapy.Field()
     content = scrapy.Field()
     answer_num = scrapy.Field()
-    comments_num = scrapy.Field()
     watch_user_num = scrapy.Field()
-    click_num = scrapy.Field()
+    view_num = scrapy.Field()
     crawl_time = scrapy.Field()
+
+    def get_insert_sql(self):
+        insert_sql = """
+             insert into zhihu_question(zhihu_id, topics, url, title, content, answer_num,
+               watch_user_num, view_num, crawl_time
+               )
+             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+             ON DUPLICATE KEY UPDATE content=VALUES(content), answer_num=VALUES(answer_num),
+               watch_user_num=VALUES(watch_user_num), view_num=VALUES(view_num)
+         """
+        zhihu_id = self["zhihu_id"][0]
+        topics = ",".join(self["topics"])
+        url = self["url"][0]
+        title = "".join(self["title"])
+        content = "".join(self["content"])
+        answer_num = int(self["answer_num"][0].replace(',', ''))
+
+        if len(self["watch_user_num"]) == 2:
+            watch_user_num = int(self["watch_user_num"][0].replace(',', ''))
+            view_num = int(self["watch_user_num"][1].replace(',', ''))
+        else:
+            watch_user_num = int(self["watch_user_num"][0].replace(',', ''))
+            view_num = int(self["view_num"][1].replace(',', ''))
+
+        crawl_time = datetime.datetime.now().strftime(SQL_DATETIME_FORMAT)
+
+        params = (zhihu_id, topics, url, title, content, answer_num,
+                  watch_user_num, view_num, crawl_time)
+
+        return insert_sql, params
 
 
 class ZhihuAnswerItem(scrapy.Item):
@@ -90,3 +121,23 @@ class ZhihuAnswerItem(scrapy.Item):
     created_time = scrapy.Field()
     updated_time = scrapy.Field()
     crawl_time = scrapy.Field()
+
+    def get_insert_sql(self):
+        insert_sql = """
+            insert into zhihu_answer(zhihu_id, url, question_id, author_id, content, voteup_num, comment_num,
+              created_time, updated_time, crawl_time
+              ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+              ON DUPLICATE KEY UPDATE content=VALUES(content), comment_num=VALUES(comment_num), voteup_num=VALUES(voteup_num),
+              updated_time=VALUES(updated_time)
+        """
+
+        created_time = datetime.datetime.fromtimestamp(self["created_time"]).strftime(SQL_DATETIME_FORMAT)
+        updated_time = datetime.datetime.fromtimestamp(self["updated_time"]).strftime(SQL_DATETIME_FORMAT)
+        params = (
+            self["zhihu_id"], self["url"], self["question_id"],
+            self["author_id"], self["content"], self["voteup_num"],
+            self["comment_num"], created_time, updated_time,
+            self["crawl_time"].strftime(SQL_DATETIME_FORMAT),
+        )
+
+        return insert_sql, params

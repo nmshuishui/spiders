@@ -20,6 +20,8 @@ class ZhihuSpider(scrapy.Spider):
     allowd_domains = ['www.zhihu.com/']
     start_urls = ['https://www.zhihu.com/']
 
+    answers_api = "https://www.zhihu.com/api/v4/questions/{0}/answers?include=data%5B%2A%5D.is_normal%2Cadmin_closed_comment%2Creward_info%2Cis_collapsed%2Cannotation_action%2Cannotation_detail%2Ccollapse_reason%2Cis_sticky%2Ccollapsed_by%2Csuggest_edit%2Ccomment_count%2Ccan_comment%2Ccontent%2Ceditable_content%2Cvoteup_count%2Creshipment_settings%2Ccomment_permission%2Ccreated_time%2Cupdated_time%2Creview_info%2Crelevant_info%2Cquestion%2Cexcerpt%2Crelationship.is_authorized%2Cis_author%2Cvoting%2Cis_thanked%2Cis_nothelp%2Cis_labeled%2Cis_recognized%2Cpaid_info%3Bdata%5B%2A%5D.mark_infos%5B%2A%5D.url%3Bdata%5B%2A%5D.author.follower_count%2Cbadge%5B%2A%5D.topics&limit={1}&offset={2}&platform=desktop&sort_by=default"
+
     def start_requests(self):
         from selenium.webdriver.chrome.options import Options
         from selenium.webdriver.common.keys import Keys
@@ -124,31 +126,55 @@ class ZhihuSpider(scrapy.Spider):
     def parse(self, response):
         all_urls = response.css('.ContentItem-title div a::attr(href)').extract()
         for url in all_urls:
-            url = re.match('(.*/question/(\d+/)).*',parse.urljoin(response.url,url)).group(1)
-            yield scrapy.Request(url=url, callback=self.parseQuestion)
+            is_match_url = re.match('(.*/question/(\d+/)).*',parse.urljoin(response.url,url))
+            if is_match_url:
+                request_url = is_match_url.group(1)
+                yield scrapy.Request(url=request_url, callback=self.parseQuestion)
+            else:
+                yield scrapy.Request(url, callback=self.parse)
 
 
     def parseQuestion(self, response):
-        question_id = re.match('(.*/question/(\d+)).*',response.url).group(2)
-        answers_api = "https://www.zhihu.com/api/v4/questions/{0}/answers?include=data%5B%2A%5D.is_normal%2Cadmin_closed_comment%2Creward_info%2Cis_collapsed%2Cannotation_action%2Cannotation_detail%2Ccollapse_reason%2Cis_sticky%2Ccollapsed_by%2Csuggest_edit%2Ccomment_count%2Ccan_comment%2Ccontent%2Ceditable_content%2Cvoteup_count%2Creshipment_settings%2Ccomment_permission%2Ccreated_time%2Cupdated_time%2Creview_info%2Crelevant_info%2Cquestion%2Cexcerpt%2Crelationship.is_authorized%2Cis_author%2Cvoting%2Cis_thanked%2Cis_nothelp%2Cis_labeled%2Cis_recognized%2Cpaid_info%3Bdata%5B%2A%5D.mark_infos%5B%2A%5D.url%3Bdata%5B%2A%5D.author.follower_count%2Cbadge%5B%2A%5D.topics&limit={1}&offset={2}&platform=desktop&sort_by=default".format(question_id,5,0)
+        if "QuestionHeader-title" in response.text:
+            # 处理新版本
+            match_obj = re.match("(.*zhihu.com/question/(\d+))(/|$).*", response.url)
+            if match_obj:
+                question_id = int(match_obj.group(2))
 
-        question_item = ItemLoader(item=ZhihuQuestionItem(), response=response)
+            item_loader = ItemLoader(item=ZhihuQuestionItem(), response=response)
 
-        question_item.add_value('zhihu_id', question_id)
-        question_item.add_css('topics', '.QuestionHeader-topics .Popover div::text')
-        question_item.add_value('url', response.url)
-        question_item.add_css('title', '.QuestionHeader-topics .QuestionHeader-title::text')
-        question_item.add_css('content', '.QuestionAnswer-content')
-        question_item.add_xpath('answer_num','//*[@id="root"]/div/main/div/div[2]/div[1]/div/div[1]/a/text()')
-        question_item.add_css('watch_user_num', '.QuestionFollowStatus-counts button .NumberBoard-itemValue')
-        question_item.add_css('view_num', '.QuestionFollowStatus-counts div .NumberBoard-itemValue')
+            item_loader.add_value('zhihu_id', question_id)
+            item_loader.add_css('topics', '.QuestionHeader-topics .Popover div::text')
+            item_loader.add_value('url', response.url)
+            item_loader.add_css('title', '.QuestionHeader-title::text')
+            item_loader.add_css('content', '.QuestionAnswers-answers')
+            item_loader.add_css("answer_num", ".List-headerText span::text")
+            item_loader.add_css('watch_user_num', '.QuestionFollowStatus-counts button .NumberBoard-itemValue::text')
+            item_loader.add_css('view_num', '.QuestionFollowStatus-counts div .NumberBoard-itemValue::text')
 
-        question_item = ItemLoader.load_item()
+            question_item = item_loader.load_item()
+        else:
+            # 处理老版本页面的item提取
+            match_obj = re.match("(.*zhihu.com/question/(\d+))(/|$).*", response.url)
+            if match_obj:
+                question_id = int(match_obj.group(2))
 
-        yield scrapy.Request(url=answers_api, callback=self.parseAnswer)
+            item_loader = ItemLoader(item=ZhihuQuestionItem(), response=response)
+            item_loader.add_value("zhihu_id", question_id)
+            item_loader.add_css("topics", ".zm-tag-editor-labels a::text")
+            item_loader.add_value("url", response.url)
+            item_loader.add_xpath("title",
+                                  "//*[@id='TopstoryContent']/div/div/div/div[2]/div/div/h2/div/a/text()")
+            item_loader.add_css("content", "#zh-question-detail")
+            item_loader.add_css("answer_num", "#zh-question-answer-num::text")
+            item_loader.add_xpath("watch_user_num",
+                                  "//*[@id='zh-question-side-header-wrap']/text()|//*[@class='zh-question-followers-sidebar']/div/a/strong/text()")
+            item_loader.add_css('view_num', '.QuestionFollowStatus-counts div .NumberBoard-itemValue')
+
+            question_item = item_loader.load_item()
+
+        yield scrapy.Request(url=self.answers_api.format(question_id, 20, 0), callback=self.parseAnswer)
         yield question_item
-        pass
-
 
     def parseAnswer(self, reponse):
         answers = json.loads(reponse.text)
@@ -172,5 +198,3 @@ class ZhihuSpider(scrapy.Spider):
 
         if not is_end:
             yield scrapy.Request(next_url, callback=self.parseAnswer)
-
-        pass
